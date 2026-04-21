@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>キッズキャッチ</title>
+<style>
+body { margin:0; overflow:hidden; background:#fffbe6; }
+canvas { display:block; }
+#startBtn {
+  position:absolute;
+  top:40%;
+  left:50%;
+  transform:translate(-50%, -50%);
+  font-size:28px;
+  padding:20px 40px;
+  border:none;
+  border-radius:20px;
+  background:#ff6b81;
+  color:#fff;
+}
+</style>
+</head>
+<body>
+
+<button id="startBtn">スタート！</button>
+<canvas id="game"></canvas>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// 音
+const bgm = new Audio("bgm.mp3");
+bgm.loop = true;
+bgm.volume = 0.4;
+
+const getSound = new Audio("get.mp3");
+const eeeSound = new Audio("eee.mp3");
+
+// 画像
+const imgBaby = new Image();
+imgBaby.src = "baby.png";
+
+const imgAfro = new Image();
+imgAfro.src = "afro.png";
+
+const imgProf = new Image();
+imgProf.src = "prof.png";
+
+const imgLeica = new Image();
+imgLeica.src = "leica.png";
+
+const imgSony = new Image();
+imgSony.src = "ソニー.png";
+
+// スタートボタン
+let started = false;
+document.getElementById("startBtn").onclick = () => {
+  started = true;
+  document.getElementById("startBtn").style.display = "none";
+  bgm.play();
+};
+
+// プレイヤー
+let basket = { x: canvas.width/2, y: canvas.height-100, w:120, h:30 };
+
+// アイテム
+let items = [];
+let score = 0;
+let speedUp = 0;
+
+// 操作
+document.addEventListener("mousemove", e => {
+  basket.x = e.clientX - basket.w/2;
+});
+document.addEventListener("touchmove", e => {
+  basket.x = e.touches[0].clientX - basket.w/2;
+});
+
+// キラキラ
+let effects = [];
+function createEffect(x,y){
+  for(let i=0;i<10;i++){
+    effects.push({
+      x:x,
+      y:y,
+      dx:(Math.random()-0.5)*6,
+      dy:(Math.random()-0.5)*6,
+      life:30
+    });
+  }
+}
+
+// 出現
+function spawnItem(){
+  let r = Math.random();
+  let item = {
+    x: Math.random()*canvas.width,
+    y:-80,
+    size:80,
+    speed: 2 + Math.random()*2 + speedUp
+  };
+
+  if(r<0.2){
+    item.img = imgBaby;
+    item.type="baby";
+    item.value=30;
+  }else if(r<0.5){
+    item.img = imgAfro;
+    item.type="afro";
+    item.value=10;
+  }else if(r<0.7){
+    item.img = imgLeica;
+    item.type="camera";
+    item.value=50;
+  }else{
+    item.img = imgProf;
+    item.type="prof";
+    item.value=5;
+  }
+
+  items.push(item);
+}
+
+// 描画
+function drawItem(item){
+  if(item.img.complete){
+    ctx.drawImage(item.img,item.x,item.y,item.size,item.size);
+  }
+}
+
+// 更新
+function update(){
+  if(!started){
+    requestAnimationFrame(update);
+    return;
+  }
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // カゴ
+  ctx.fillStyle="#ff6b81";
+  ctx.fillRect(basket.x,basket.y,basket.w,basket.h);
+
+  items.forEach((item,i)=>{
+    item.y += item.speed;
+    drawItem(item);
+
+    // 当たり判定
+    if(
+      item.y+item.size>basket.y &&
+      item.x+item.size>basket.x &&
+      item.x<basket.x+basket.w
+    ){
+      score += item.value;
+
+      if(item.type==="camera"){
+        eeeSound.currentTime=0;
+        eeeSound.play();
+      }else{
+        getSound.currentTime=0;
+        getSound.play();
+      }
+
+      createEffect(item.x,item.y);
+      items.splice(i,1);
+    }
+
+    if(item.y>canvas.height){
+      items.splice(i,1);
+    }
+  });
+
+  // キラキラ描画
+  effects.forEach((e,i)=>{
+    ctx.fillStyle="gold";
+    ctx.fillRect(e.x,e.y,5,5);
+    e.x+=e.dx;
+    e.y+=e.dy;
+    e.life--;
+    if(e.life<=0) effects.splice(i,1);
+  });
+
+  // スコア
+  ctx.fillStyle="#333";
+  ctx.font="32px sans-serif";
+  ctx.fillText("スコア: "+score,20,40);
+
+  requestAnimationFrame(update);
+}
+
+// スピード徐々にUP
+setInterval(()=>{
+  speedUp += 0.2;
+},3000);
+
+setInterval(spawnItem,800);
+update();
+</script>
+
+</body>
+</html>
