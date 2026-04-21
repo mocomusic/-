@@ -3,24 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ずっとつかまえるゲーム</title>
+<title>キラキラゲーム</title>
 
 <style>
-body {
-  margin:0;
-  overflow:hidden;
-  background:#fff5f8;
-  font-family:sans-serif;
-}
+body { margin:0; overflow:hidden; background:#fff5f8; font-family:sans-serif; }
 
-#score {
+#ui {
   position:absolute;
   top:10px;
   left:50%;
   transform:translateX(-50%);
+  text-align:center;
+}
+
+#score,#time {
   background:#fff;
-  padding:8px 16px;
+  padding:6px 14px;
   border-radius:20px;
+  margin-top:5px;
 }
 
 #startBtn {
@@ -36,13 +36,29 @@ body {
   border-radius:15px;
 }
 
+#end {
+  position:absolute;
+  top:40%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  font-size:40px;
+  color:#ff4f79;
+  display:none;
+}
+
 canvas { display:block; }
 </style>
 </head>
 
 <body>
 
-<div id="score">0</div>
+<div id="ui">
+  <div id="score">0</div>
+  <div id="time">180</div>
+</div>
+
+<div id="end">おわり！✨</div>
+
 <button id="startBtn">スタート！</button>
 <canvas id="game"></canvas>
 
@@ -53,6 +69,8 @@ const canvas=document.getElementById("game");
 const ctx=canvas.getContext("2d");
 const startBtn=document.getElementById("startBtn");
 const scoreEl=document.getElementById("score");
+const timeEl=document.getElementById("time");
+const endEl=document.getElementById("end");
 const sound=document.getElementById("sound");
 
 function resize(){
@@ -68,8 +86,41 @@ const files=[
 ];
 
 let items=[];
-let started=false;
+let effects=[];
 let score=0;
+let started=false;
+let time=180;
+
+// ================= エフェクト =================
+function createEffect(x,y){
+  for(let i=0;i<20;i++){
+    effects.push({
+      x,
+      y,
+      vx:(Math.random()-0.5)*8,
+      vy:(Math.random()-0.5)*8,
+      life:30,
+      size:4+Math.random()*6
+    });
+  }
+}
+
+function updateEffects(){
+  effects=effects.filter(e=>{
+    e.x+=e.vx;
+    e.y+=e.vy;
+    e.vy+=0.2;
+    e.life--;
+    return e.life>0;
+  });
+}
+
+function drawEffects(){
+  effects.forEach(e=>{
+    ctx.fillStyle="gold";
+    ctx.fillRect(e.x,e.y,e.size,e.size);
+  });
+}
 
 // ================= 出現 =================
 function spawn(){
@@ -80,16 +131,16 @@ function spawn(){
     img,
     x:Math.random()*canvas.width,
     y:Math.random()*canvas.height,
-    size:120,
-    speed:1 + score*0.02 // 徐々に速く
+    size:120-score*0.2,
+    speed:1+score*0.03
   });
 }
 
 // ================= 動き =================
 function move(){
   items.forEach(i=>{
-    i.x += (Math.random()-0.5)*i.speed*5;
-    i.y += (Math.random()-0.5)*i.speed*5;
+    i.x+=(Math.random()-0.5)*i.speed*5;
+    i.y+=(Math.random()-0.5)*i.speed*5;
 
     if(i.x<0)i.x=0;
     if(i.y<0)i.y=0;
@@ -98,7 +149,7 @@ function move(){
   });
 }
 
-// ================= 逃げる =================
+// ================= 逃げ =================
 function flee(px,py){
   items.forEach(i=>{
     const dx=i.x-px;
@@ -106,8 +157,8 @@ function flee(px,py){
     const dist=Math.sqrt(dx*dx+dy*dy);
 
     if(dist<120){
-      i.x += dx/dist*30;
-      i.y += dy/dist*30;
+      i.x+=dx/dist*30;
+      i.y+=dy/dist*30;
     }
   });
 }
@@ -123,11 +174,26 @@ function catchCheck(px,py){
       sound.currentTime=0;
       sound.play();
 
+      createEffect(i.x+i.size/2,i.y+i.size/2);
+
       items.splice(index,1);
-      spawn(); // すぐ次出す
+      spawn();
     }
   });
 }
+
+// ================= タイマー =================
+setInterval(()=>{
+  if(started && time>0){
+    time--;
+    timeEl.textContent=time;
+  }
+
+  if(time===0){
+    started=false;
+    endEl.style.display="block";
+  }
+},1000);
 
 // ================= 操作 =================
 canvas.addEventListener("mousemove",e=>{
@@ -142,12 +208,12 @@ canvas.addEventListener("touchmove",e=>{
 },{passive:true});
 
 canvas.addEventListener("click",e=>{
-  catchCheck(e.clientX,e.clientY);
+  if(started)catchCheck(e.clientX,e.clientY);
 });
 
 canvas.addEventListener("touchstart",e=>{
   const t=e.touches[0];
-  catchCheck(t.clientX,t.clientY);
+  if(started)catchCheck(t.clientX,t.clientY);
 },{passive:true});
 
 // ================= 描画 =================
@@ -159,12 +225,15 @@ function draw(){
       ctx.drawImage(i.img,i.x,i.y,i.size,i.size);
     }
   });
+
+  drawEffects();
 }
 
 // ================= ループ =================
 function loop(){
   if(started){
     move();
+    updateEffects();
   }
   draw();
   requestAnimationFrame(loop);
@@ -175,7 +244,7 @@ startBtn.onclick=()=>{
   startBtn.style.display="none";
   started=true;
 
-  for(let i=0;i<3;i++) spawn(); // 最初3つ
+  for(let i=0;i<3;i++) spawn();
 };
 
 loop();
