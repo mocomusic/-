@@ -3,36 +3,24 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ノンストップ20レベル</title>
+<title>ずっとつかまえるゲーム</title>
 
 <style>
-body { margin:0; overflow:hidden; background:#fff5f8; font-family:sans-serif; }
+body {
+  margin:0;
+  overflow:hidden;
+  background:#fff5f8;
+  font-family:sans-serif;
+}
 
-#ui {
+#score {
   position:absolute;
   top:10px;
   left:50%;
   transform:translateX(-50%);
-  text-align:center;
-  z-index:10;
-}
-
-#score,#level {
   background:#fff;
-  padding:6px 14px;
+  padding:8px 16px;
   border-radius:20px;
-  margin-top:5px;
-}
-
-#levelUp {
-  position:absolute;
-  top:40%;
-  left:50%;
-  transform:translate(-50%,-50%);
-  font-size:48px;
-  color:#ff4f79;
-  display:none;
-  z-index:20;
 }
 
 #startBtn {
@@ -54,14 +42,7 @@ canvas { display:block; }
 
 <body>
 
-<div id="ui">
-  <div>つかまえて！</div>
-  <div id="score">0 / 9</div>
-  <div id="level">レベル1</div>
-</div>
-
-<div id="levelUp">LEVEL UP!</div>
-
+<div id="score">0</div>
 <button id="startBtn">スタート！</button>
 <canvas id="game"></canvas>
 
@@ -72,8 +53,6 @@ const canvas=document.getElementById("game");
 const ctx=canvas.getContext("2d");
 const startBtn=document.getElementById("startBtn");
 const scoreEl=document.getElementById("score");
-const levelEl=document.getElementById("level");
-const levelUpEl=document.getElementById("levelUp");
 const sound=document.getElementById("sound");
 
 function resize(){
@@ -88,151 +67,64 @@ const files=[
 "yukinago.png","karan.png","sauaka.png","uedake.png","reiko.png"
 ];
 
-let sprites=[];
-let boss=null;
-let level=1;
-let cleared=0;
+let items=[];
 let started=false;
-const MAX_LEVEL=20;
+let score=0;
 
-// ================= 初期化 =================
-function createSprites(){
-  sprites=[];
-  const size=Math.max(50,160-level*5);
+// ================= 出現 =================
+function spawn(){
+  const img=new Image();
+  img.src=files[Math.floor(Math.random()*files.length)];
 
-  files.forEach(f=>{
-    const img=new Image();
-    img.src=f;
-
-    sprites.push({
-      img,
-      x:Math.random()*(canvas.width-100),
-      y:120+Math.random()*(canvas.height-200),
-      w:size,
-      h:size,
-      vx:(Math.random()-0.5)*(1+level*0.4),
-      vy:(Math.random()-0.5)*(1+level*0.4),
-      alive:true
-    });
+  items.push({
+    img,
+    x:Math.random()*canvas.width,
+    y:Math.random()*canvas.height,
+    size:120,
+    speed:1 + score*0.02 // 徐々に速く
   });
-
-  if(level%5===0){
-    const img=new Image();
-    img.src=files[Math.floor(Math.random()*files.length)];
-
-    boss={
-      img,
-      x:canvas.width/2,
-      y:200,
-      w:size*2,
-      h:size*2,
-      vx:3+level,
-      vy:3+level,
-      hp:3+Math.floor(level/5),
-      alive:true,
-      teleportTimer:0,
-      isBoss:true
-    };
-  }else{
-    boss=null;
-  }
-}
-
-function updateUI(){
-  scoreEl.textContent=`${cleared} / ${sprites.length+(boss?1:0)}`;
-  levelEl.textContent=`レベル ${level}`;
-}
-
-// ================= レベルアップ表示 =================
-function showLevelUp(){
-  levelUpEl.style.display="block";
-  setTimeout(()=>{
-    levelUpEl.style.display="none";
-  },600);
-}
-
-// ================= スタート =================
-startBtn.onclick=()=>{
-  sound.play().then(()=>{sound.pause();sound.currentTime=0});
-  startBtn.style.display="none";
-  started=true;
-  nextLevel();
-};
-
-function nextLevel(){
-  cleared=0;
-  createSprites();
-  updateUI();
-  showLevelUp();
 }
 
 // ================= 動き =================
 function move(){
-  [...sprites,boss].forEach(s=>{
-    if(!s||!s.alive)return;
+  items.forEach(i=>{
+    i.x += (Math.random()-0.5)*i.speed*5;
+    i.y += (Math.random()-0.5)*i.speed*5;
 
-    s.x+=s.vx;
-    s.y+=s.vy;
-
-    if(s.x<0||s.x+s.w>canvas.width)s.vx*=-1;
-    if(s.y<100||s.y+s.h>canvas.height)s.vy*=-1;
+    if(i.x<0)i.x=0;
+    if(i.y<0)i.y=0;
+    if(i.x>canvas.width-i.size)i.x=canvas.width-i.size;
+    if(i.y>canvas.height-i.size)i.y=canvas.height-i.size;
   });
-
-  if(boss&&boss.alive){
-    boss.teleportTimer++;
-    if(boss.teleportTimer>100){
-      boss.x=Math.random()*(canvas.width-boss.w);
-      boss.y=120+Math.random()*(canvas.height-200);
-      boss.teleportTimer=0;
-    }
-  }
 }
 
-// ================= 逃げ =================
+// ================= 逃げる =================
 function flee(px,py){
-  [...sprites,boss].forEach(s=>{
-    if(!s||!s.alive)return;
-
-    const dx=(s.x+s.w/2)-px;
-    const dy=(s.y+s.h/2)-py;
+  items.forEach(i=>{
+    const dx=i.x-px;
+    const dy=i.y-py;
     const dist=Math.sqrt(dx*dx+dy*dy);
 
-    if(dist<140){
-      const power=(s.isBoss?40:20)+level*3;
-      s.x+=dx/dist*power;
-      s.y+=dy/dist*power;
+    if(dist<120){
+      i.x += dx/dist*30;
+      i.y += dy/dist*30;
     }
   });
 }
 
-// ================= キャッチ =================
+// ================= タップ =================
 function catchCheck(px,py){
-  [...sprites,boss].forEach(s=>{
-    if(!s||!s.alive)return;
+  items.forEach((i,index)=>{
+    if(px>i.x && px<i.x+i.size && py>i.y && py<i.y+i.size){
 
-    if(px>s.x&&px<s.x+s.w&&py>s.y&&py<s.y+s.h){
+      score++;
+      scoreEl.textContent=score;
 
-      if(s.isBoss){
-        s.hp--;
-        sound.play();
-        if(s.hp<=0){
-          s.alive=false;
-          cleared++;
-        }
-      }else{
-        s.alive=false;
-        cleared++;
-        sound.play();
-      }
+      sound.currentTime=0;
+      sound.play();
 
-      updateUI();
-
-      if(cleared===sprites.length+(boss?1:0)){
-        if(level < MAX_LEVEL){
-          level++;
-          nextLevel();
-        }
-      }
+      items.splice(index,1);
+      spawn(); // すぐ次出す
     }
   });
 }
@@ -262,25 +154,30 @@ canvas.addEventListener("touchstart",e=>{
 function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  sprites.forEach(s=>{
-    if(s.alive&&s.img.complete){
-      ctx.drawImage(s.img,s.x,s.y,s.w,s.h);
+  items.forEach(i=>{
+    if(i.img.complete){
+      ctx.drawImage(i.img,i.x,i.y,i.size,i.size);
     }
   });
-
-  if(boss&&boss.alive&&boss.img.complete){
-    ctx.drawImage(boss.img,boss.x,boss.y,boss.w,boss.h);
-
-    ctx.fillStyle="red";
-    ctx.fillRect(boss.x,boss.y-10,boss.w*(boss.hp/(3+Math.floor(level/5))),8);
-  }
 }
 
+// ================= ループ =================
 function loop(){
-  if(started)move();
+  if(started){
+    move();
+  }
   draw();
   requestAnimationFrame(loop);
 }
+
+startBtn.onclick=()=>{
+  sound.play().then(()=>{sound.pause();sound.currentTime=0});
+  startBtn.style.display="none";
+  started=true;
+
+  for(let i=0;i<3;i++) spawn(); // 最初3つ
+};
+
 loop();
 </script>
 
