@@ -2,55 +2,97 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>キッズタッチゲーム</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>にげるキッズゲーム</title>
 <style>
 body {
-  margin:0;
-  background:#fff7f0;
-  font-family:sans-serif;
-  text-align:center;
+  margin: 0;
+  overflow: hidden;
+  background: linear-gradient(to bottom, #fff7f0, #ffeef5);
+  font-family: sans-serif;
 }
 
-h1 {
-  margin:10px;
-  color:#ff6b81;
+#title {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 34px;
+  font-weight: bold;
+  color: #ff5f87;
+  z-index: 20;
+  text-shadow: 0 2px 0 #fff;
 }
 
-#game {
-  display:flex;
-  flex-wrap:wrap;
-  justify-content:center;
-  gap:10px;
-  padding:10px;
+#score {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 22px;
+  color: #444;
+  background: rgba(255,255,255,0.85);
+  padding: 8px 18px;
+  border-radius: 20px;
+  z-index: 20;
 }
 
-.card {
-  width:100px;
-  height:100px;
-  border-radius:15px;
-  overflow:hidden;
-  box-shadow:0 4px 8px rgba(0,0,0,0.2);
+#startBtn, #retryBtn {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 16px 30px;
+  font-size: 26px;
+  border: none;
+  border-radius: 18px;
+  background: #ff6b81;
+  color: white;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.18);
+  z-index: 30;
 }
 
-.card img {
-  width:100%;
-  height:100%;
-  object-fit:cover;
+#startBtn {
+  top: 45%;
+  transform: translate(-50%, -50%);
+}
+
+#retryBtn {
+  top: 58%;
+  display: none;
+}
+
+canvas {
+  display: block;
 }
 </style>
 </head>
-
 <body>
 
-<h1>タップしてね👆</h1>
+<div id="title">タップしてつかまえて！</div>
+<div id="score">0 / 9</div>
+<button id="startBtn">スタート！</button>
+<button id="retryBtn">もういっかい</button>
+<canvas id="game"></canvas>
 
-<div id="game"></div>
-
-<!-- 音はこれ1つだけ -->
-<audio id="sound" src="get.mp3"></audio>
+<audio id="getSound" src="get.mp3"></audio>
 
 <script>
-const images = [
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const startBtn = document.getElementById("startBtn");
+const retryBtn = document.getElementById("retryBtn");
+const scoreEl = document.getElementById("score");
+const getSound = document.getElementById("getSound");
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener("resize", resizeCanvas);
+
+// 画像
+const files = [
   "baba.png",
   "kei.png",
   "nagomi.png",
@@ -62,44 +104,242 @@ const images = [
   "reiko.png"
 ];
 
-const game = document.getElementById("game");
-const sound = document.getElementById("sound");
+const sprites = [];
+files.forEach(file => {
+  const img = new Image();
+  img.src = file;
+  sprites.push({
+    name: file,
+    img,
+    x: 0,
+    y: 0,
+    w: 150,
+    h: 150,
+    vx: 0,
+    vy: 0,
+    alive: true,
+    caught: false
+  });
+});
 
-let count = 0;
+let started = false;
+let cleared = 0;
+let sparkles = [];
+let gameOver = false;
 
-// スマホ対策（最初のタップで音OKにする）
-document.addEventListener("touchstart", () => {
-  sound.play().then(()=>sound.pause());
-}, { once:true });
+// 初期配置
+function resetGame() {
+  resizeCanvas();
+  cleared = 0;
+  gameOver = false;
+  retryBtn.style.display = "none";
+  startBtn.style.display = "block";
 
-images.forEach(src => {
-  const div = document.createElement("div");
-  div.className = "card";
+  sprites.forEach((s, i) => {
+    s.w = 150;
+    s.h = 150;
+    s.x = 30 + (i % 3) * (canvas.width / 3);
+    s.y = 130 + Math.floor(i / 3) * 180;
+    s.vx = (Math.random() - 0.5) * 1.5;
+    s.vy = (Math.random() - 0.5) * 1.5;
+    s.alive = true;
+    s.caught = false;
 
-  const img = document.createElement("img");
-  img.src = src;
+    // 画面内に収める
+    if (s.x + s.w > canvas.width) s.x = canvas.width - s.w - 20;
+    if (s.y + s.h > canvas.height) s.y = canvas.height - s.h - 20;
+  });
 
-  div.appendChild(img);
+  updateScore();
+}
 
-  div.addEventListener("click", () => {
-    sound.currentTime = 0;
-    sound.play();
+function updateScore() {
+  scoreEl.textContent = `${cleared} / ${sprites.length}`;
+}
 
-    div.style.transform = "scale(0)";
-    setTimeout(() => div.remove(), 200);
+function unlockSound() {
+  getSound.play().then(() => {
+    getSound.pause();
+    getSound.currentTime = 0;
+  }).catch(() => {});
+}
 
-    count++;
+startBtn.addEventListener("click", () => {
+  unlockSound();
+  started = true;
+  startBtn.style.display = "none";
+});
 
-    if(count === images.length){
-      setTimeout(() => {
-        alert("ぜんぶできた！✨");
-      }, 300);
+retryBtn.addEventListener("click", () => {
+  resetGame();
+  started = true;
+});
+
+function addSparkles(x, y) {
+  for (let i = 0; i < 14; i++) {
+    sparkles.push({
+      x,
+      y,
+      vx: (Math.random() - 0.5) * 7,
+      vy: (Math.random() - 0.5) * 7,
+      life: 24,
+      size: 4 + Math.random() * 4
+    });
+  }
+}
+
+function updateSparkles() {
+  sparkles = sparkles.filter(sp => {
+    sp.x += sp.vx;
+    sp.y += sp.vy;
+    sp.life--;
+    return sp.life > 0;
+  });
+}
+
+function drawSparkles() {
+  sparkles.forEach(sp => {
+    ctx.fillStyle = "gold";
+    ctx.fillRect(sp.x, sp.y, sp.size, sp.size);
+  });
+}
+
+// ゆるく動く
+function moveSprites() {
+  sprites.forEach(s => {
+    if (!s.alive) return;
+
+    s.x += s.vx;
+    s.y += s.vy;
+
+    if (s.x < 0 || s.x + s.w > canvas.width) s.vx *= -1;
+    if (s.y < 100 || s.y + s.h > canvas.height) s.vy *= -1;
+  });
+}
+
+// 近づくと逃げる
+function fleeFrom(px, py) {
+  sprites.forEach(s => {
+    if (!s.alive) return;
+
+    const cx = s.x + s.w / 2;
+    const cy = s.y + s.h / 2;
+    const dx = cx - px;
+    const dy = cy - py;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist < 140) {
+      const power = 22; // 逃げる強さ
+      const nx = dx / (dist || 1);
+      const ny = dy / (dist || 1);
+
+      s.x += nx * power;
+      s.y += ny * power;
+
+      // 画面からはみ出さない
+      if (s.x < 0) s.x = 0;
+      if (s.y < 100) s.y = 100;
+      if (s.x + s.w > canvas.width) s.x = canvas.width - s.w;
+      if (s.y + s.h > canvas.height) s.y = canvas.height - s.h;
+    }
+  });
+}
+
+function tryCatch(px, py) {
+  if (!started || gameOver) return;
+
+  for (let i = sprites.length - 1; i >= 0; i--) {
+    const s = sprites[i];
+    if (!s.alive) continue;
+
+    const hit =
+      px >= s.x &&
+      px <= s.x + s.w &&
+      py >= s.y &&
+      py <= s.y + s.h;
+
+    if (hit) {
+      s.alive = false;
+      cleared++;
+      updateScore();
+      getSound.currentTime = 0;
+      getSound.play().catch(() => {});
+      addSparkles(s.x + s.w / 2, s.y + s.h / 2);
+
+      if (cleared === sprites.length) {
+        gameOver = true;
+        setTimeout(() => {
+          alert("ぜんぶつかまえた！✨");
+          retryBtn.style.display = "block";
+        }, 200);
+      }
+      return;
+    }
+  }
+}
+
+// マウスや指が近づいたら逃げる
+canvas.addEventListener("mousemove", e => {
+  if (!started || gameOver) return;
+  fleeFrom(e.clientX, e.clientY);
+});
+
+canvas.addEventListener("touchmove", e => {
+  if (!started || gameOver) return;
+  if (e.touches.length > 0) {
+    const t = e.touches[0];
+    fleeFrom(t.clientX, t.clientY);
+  }
+}, { passive: true });
+
+// タップで捕まえる
+canvas.addEventListener("click", e => {
+  tryCatch(e.clientX, e.clientY);
+});
+
+canvas.addEventListener("touchstart", e => {
+  unlockSound();
+  if (e.touches.length > 0) {
+    const t = e.touches[0];
+    tryCatch(t.clientX, t.clientY);
+  }
+}, { passive: true });
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // うっすら背景の丸
+  for (let i = 0; i < 8; i++) {
+    ctx.fillStyle = i % 2 === 0 ? "rgba(255,210,220,0.15)" : "rgba(255,235,180,0.15)";
+    ctx.beginPath();
+    ctx.arc((i * 170) % canvas.width, 140 + (i * 110) % canvas.height, 50, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  sprites.forEach(s => {
+    if (!s.alive) return;
+    if (s.img.complete) {
+      ctx.drawImage(s.img, s.x, s.y, s.w, s.h);
+    } else {
+      ctx.fillStyle = "#ccc";
+      ctx.fillRect(s.x, s.y, s.w, s.h);
     }
   });
 
-  game.appendChild(div);
-});
-</script>
+  drawSparkles();
+}
 
+function loop() {
+  if (started && !gameOver) {
+    moveSprites();
+    updateSparkles();
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+resetGame();
+loop();
+</script>
 </body>
 </html>
