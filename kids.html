@@ -3,343 +3,305 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>にげるキッズゲーム</title>
+<title>鬼つよキャッチ</title>
+
 <style>
 body {
-  margin: 0;
-  overflow: hidden;
-  background: linear-gradient(to bottom, #fff7f0, #ffeef5);
-  font-family: sans-serif;
+  margin:0;
+  overflow:hidden;
+  background:linear-gradient(#fff7f0,#ffeef5);
+  font-family:sans-serif;
 }
 
-#title {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 34px;
-  font-weight: bold;
-  color: #ff5f87;
-  z-index: 20;
-  text-shadow: 0 2px 0 #fff;
+#ui {
+  position:absolute;
+  top:10px;
+  left:50%;
+  transform:translateX(-50%);
+  text-align:center;
+  z-index:10;
 }
 
-#score {
-  position: absolute;
-  top: 60px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 22px;
-  color: #444;
-  background: rgba(255,255,255,0.85);
-  padding: 8px 18px;
-  border-radius: 20px;
-  z-index: 20;
-}
-
-#startBtn, #retryBtn {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 16px 30px;
-  font-size: 26px;
-  border: none;
-  border-radius: 18px;
-  background: #ff6b81;
-  color: white;
-  box-shadow: 0 6px 16px rgba(0,0,0,0.18);
-  z-index: 30;
+#score, #level {
+  background:#fff;
+  padding:6px 14px;
+  border-radius:20px;
+  margin-top:5px;
 }
 
 #startBtn {
-  top: 45%;
-  transform: translate(-50%, -50%);
+  position:absolute;
+  top:45%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  padding:18px 30px;
+  font-size:26px;
+  background:#ff6b81;
+  color:#fff;
+  border:none;
+  border-radius:15px;
 }
 
-#retryBtn {
-  top: 58%;
-  display: none;
-}
-
-canvas {
-  display: block;
-}
+canvas { display:block; }
 </style>
 </head>
+
 <body>
 
-<div id="title">タップしてつかまえて！</div>
-<div id="score">0 / 9</div>
+<div id="ui">
+  <div>つかまえて！</div>
+  <div id="score">0 / 9</div>
+  <div id="level">レベル1</div>
+</div>
+
 <button id="startBtn">スタート！</button>
-<button id="retryBtn">もういっかい</button>
 <canvas id="game"></canvas>
 
-<audio id="getSound" src="get.mp3"></audio>
+<audio id="sound" src="get.mp3"></audio>
 
 <script>
 const canvas = document.getElementById("game");
 const ctx = canvas.getContext("2d");
 const startBtn = document.getElementById("startBtn");
-const retryBtn = document.getElementById("retryBtn");
 const scoreEl = document.getElementById("score");
-const getSound = document.getElementById("getSound");
+const levelEl = document.getElementById("level");
+const sound = document.getElementById("sound");
 
-function resizeCanvas() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+function resize(){
+  canvas.width = innerWidth;
+  canvas.height = innerHeight;
 }
-resizeCanvas();
-window.addEventListener("resize", resizeCanvas);
+resize();
+addEventListener("resize",resize);
 
-// 画像
 const files = [
-  "baba.png",
-  "kei.png",
-  "nagomi.png",
-  "oyako.png",
-  "yukinago.png",
-  "karan.png",
-  "sauaka.png",
-  "uedake.png",
-  "reiko.png"
+"baba.png","kei.png","nagomi.png","oyako.png",
+"yukinago.png","karan.png","sauaka.png","uedake.png","reiko.png"
 ];
 
-const sprites = [];
-files.forEach(file => {
-  const img = new Image();
-  img.src = file;
-  sprites.push({
-    name: file,
-    img,
-    x: 0,
-    y: 0,
-    w: 150,
-    h: 150,
-    vx: 0,
-    vy: 0,
-    alive: true,
-    caught: false
-  });
-});
+let sprites=[];
+let boss=null;
+let level=1;
+let cleared=0;
+let started=false;
 
-let started = false;
-let cleared = 0;
-let sparkles = [];
-let gameOver = false;
+// ================= 初期化 =================
+function createSprites(){
+  sprites=[];
+  const size = Math.max(60,160 - level*10);
 
-// 初期配置
-function resetGame() {
-  resizeCanvas();
-  cleared = 0;
-  gameOver = false;
-  retryBtn.style.display = "none";
-  startBtn.style.display = "block";
+  files.forEach(f=>{
+    const img=new Image();
+    img.src=f;
 
-  sprites.forEach((s, i) => {
-    s.w = 150;
-    s.h = 150;
-    s.x = 30 + (i % 3) * (canvas.width / 3);
-    s.y = 130 + Math.floor(i / 3) * 180;
-    s.vx = (Math.random() - 0.5) * 1.5;
-    s.vy = (Math.random() - 0.5) * 1.5;
-    s.alive = true;
-    s.caught = false;
-
-    // 画面内に収める
-    if (s.x + s.w > canvas.width) s.x = canvas.width - s.w - 20;
-    if (s.y + s.h > canvas.height) s.y = canvas.height - s.h - 20;
-  });
-
-  updateScore();
-}
-
-function updateScore() {
-  scoreEl.textContent = `${cleared} / ${sprites.length}`;
-}
-
-function unlockSound() {
-  getSound.play().then(() => {
-    getSound.pause();
-    getSound.currentTime = 0;
-  }).catch(() => {});
-}
-
-startBtn.addEventListener("click", () => {
-  unlockSound();
-  started = true;
-  startBtn.style.display = "none";
-});
-
-retryBtn.addEventListener("click", () => {
-  resetGame();
-  started = true;
-});
-
-function addSparkles(x, y) {
-  for (let i = 0; i < 14; i++) {
-    sparkles.push({
-      x,
-      y,
-      vx: (Math.random() - 0.5) * 7,
-      vy: (Math.random() - 0.5) * 7,
-      life: 24,
-      size: 4 + Math.random() * 4
+    sprites.push({
+      img,
+      x:Math.random()*(canvas.width-100),
+      y:120+Math.random()*(canvas.height-200),
+      w:size,
+      h:size,
+      vx:(Math.random()-0.5)*(1+level*0.5),
+      vy:(Math.random()-0.5)*(1+level*0.5),
+      alive:true
     });
+  });
+
+  // 👹鬼ボス（レベル3〜）
+  if(level >= 3){
+    const img=new Image();
+    img.src = files[Math.floor(Math.random()*files.length)];
+
+    boss = {
+      img,
+      x:canvas.width/2,
+      y:200,
+      w:size*2,
+      h:size*2,
+      vx:4+level,
+      vy:4+level,
+      hp:5,
+      alive:true,
+      teleportTimer:0,
+      isBoss:true
+    };
+  } else {
+    boss=null;
   }
 }
 
-function updateSparkles() {
-  sparkles = sparkles.filter(sp => {
-    sp.x += sp.vx;
-    sp.y += sp.vy;
-    sp.life--;
-    return sp.life > 0;
-  });
+// ================= UI =================
+function updateUI(){
+  scoreEl.textContent = `${cleared} / ${sprites.length + (boss?1:0)}`;
+  levelEl.textContent = `レベル ${level}`;
 }
 
-function drawSparkles() {
-  sparkles.forEach(sp => {
-    ctx.fillStyle = "gold";
-    ctx.fillRect(sp.x, sp.y, sp.size, sp.size);
-  });
+// ================= スタート =================
+startBtn.onclick = ()=>{
+  sound.play().then(()=>{sound.pause();sound.currentTime=0});
+  startBtn.style.display="none";
+  started=true;
+  nextLevel();
+};
+
+function nextLevel(){
+  cleared=0;
+  createSprites();
+  updateUI();
 }
 
-// ゆるく動く
-function moveSprites() {
-  sprites.forEach(s => {
-    if (!s.alive) return;
+// ================= 移動 =================
+function move(){
+  [...sprites, boss].forEach(s=>{
+    if(!s || !s.alive) return;
 
     s.x += s.vx;
     s.y += s.vy;
 
-    if (s.x < 0 || s.x + s.w > canvas.width) s.vx *= -1;
-    if (s.y < 100 || s.y + s.h > canvas.height) s.vy *= -1;
+    if(s.x<0 || s.x+s.w>canvas.width) s.vx*=-1;
+    if(s.y<100 || s.y+s.h>canvas.height) s.vy*=-1;
   });
-}
 
-// 近づくと逃げる
-function fleeFrom(px, py) {
-  sprites.forEach(s => {
-    if (!s.alive) return;
+  // 👹ボス特殊
+  if(boss && boss.alive){
+    boss.teleportTimer++;
 
-    const cx = s.x + s.w / 2;
-    const cy = s.y + s.h / 2;
-    const dx = cx - px;
-    const dy = cy - py;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-
-    if (dist < 140) {
-      const power = 22; // 逃げる強さ
-      const nx = dx / (dist || 1);
-      const ny = dy / (dist || 1);
-
-      s.x += nx * power;
-      s.y += ny * power;
-
-      // 画面からはみ出さない
-      if (s.x < 0) s.x = 0;
-      if (s.y < 100) s.y = 100;
-      if (s.x + s.w > canvas.width) s.x = canvas.width - s.w;
-      if (s.y + s.h > canvas.height) s.y = canvas.height - s.h;
+    // ワープ
+    if(boss.teleportTimer > 100){
+      boss.x = Math.random()*(canvas.width - boss.w);
+      boss.y = 120 + Math.random()*(canvas.height - 200);
+      boss.teleportTimer = 0;
     }
-  });
+
+    // たまに止まる（チャンス）
+    if(Math.random() < 0.01){
+      boss.vx = 0;
+      boss.vy = 0;
+      setTimeout(()=>{
+        boss.vx = 4+level;
+        boss.vy = 4+level;
+      },700);
+    }
+  }
 }
 
-function tryCatch(px, py) {
-  if (!started || gameOver) return;
+// ================= 逃げる =================
+function flee(px,py){
+  [...sprites, boss].forEach(s=>{
+    if(!s || !s.alive) return;
 
-  for (let i = sprites.length - 1; i >= 0; i--) {
-    const s = sprites[i];
-    if (!s.alive) continue;
+    const dx = (s.x+s.w/2) - px;
+    const dy = (s.y+s.h/2) - py;
+    const dist = Math.sqrt(dx*dx + dy*dy);
 
-    const hit =
-      px >= s.x &&
-      px <= s.x + s.w &&
-      py >= s.y &&
-      py <= s.y + s.h;
+    if(dist < 140){
 
-    if (hit) {
-      s.alive = false;
-      cleared++;
-      updateScore();
-      getSound.currentTime = 0;
-      getSound.play().catch(() => {});
-      addSparkles(s.x + s.w / 2, s.y + s.h / 2);
+      if(s.isBoss){
+        // 👹ワープ逃げ
+        if(dist < 150){
+          s.x = Math.random()*(canvas.width - s.w);
+          s.y = 120 + Math.random()*(canvas.height - 200);
+          return;
+        }
 
-      if (cleared === sprites.length) {
-        gameOver = true;
-        setTimeout(() => {
-          alert("ぜんぶつかまえた！✨");
-          retryBtn.style.display = "block";
-        }, 200);
+        const power = 40 + level*5;
+        s.x += dx/dist * power;
+        s.y += dy/dist * power;
+
+      } else {
+        const power = 20 + level*3;
+        s.x += dx/dist * power;
+        s.y += dy/dist * power;
       }
-      return;
     }
-  }
+  });
 }
 
-// マウスや指が近づいたら逃げる
-canvas.addEventListener("mousemove", e => {
-  if (!started || gameOver) return;
-  fleeFrom(e.clientX, e.clientY);
+// ================= 捕まえる =================
+function catchCheck(px,py){
+  [...sprites, boss].forEach(s=>{
+    if(!s || !s.alive) return;
+
+    if(px>s.x && px<s.x+s.w && py>s.y && py<s.y+s.h){
+
+      if(s.isBoss){
+        s.hp--;
+        sound.play();
+
+        if(s.hp<=0){
+          s.alive=false;
+          cleared++;
+        }
+
+      } else {
+        s.alive=false;
+        cleared++;
+        sound.play();
+      }
+
+      updateUI();
+
+      if(cleared === sprites.length + (boss?1:0)){
+        level++;
+        setTimeout(()=>{
+          alert("レベルアップ！");
+          nextLevel();
+        },300);
+      }
+    }
+  });
+}
+
+// ================= 操作 =================
+canvas.addEventListener("mousemove",e=>{
+  if(started) flee(e.clientX,e.clientY);
 });
 
-canvas.addEventListener("touchmove", e => {
-  if (!started || gameOver) return;
-  if (e.touches.length > 0) {
-    const t = e.touches[0];
-    fleeFrom(t.clientX, t.clientY);
+canvas.addEventListener("touchmove",e=>{
+  if(started){
+    const t=e.touches[0];
+    flee(t.clientX,t.clientY);
   }
-}, { passive: true });
+},{passive:true});
 
-// タップで捕まえる
-canvas.addEventListener("click", e => {
-  tryCatch(e.clientX, e.clientY);
+canvas.addEventListener("click",e=>{
+  catchCheck(e.clientX,e.clientY);
 });
 
-canvas.addEventListener("touchstart", e => {
-  unlockSound();
-  if (e.touches.length > 0) {
-    const t = e.touches[0];
-    tryCatch(t.clientX, t.clientY);
-  }
-}, { passive: true });
+canvas.addEventListener("touchstart",e=>{
+  const t=e.touches[0];
+  catchCheck(t.clientX,t.clientY);
+},{passive:true});
 
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+// ================= 描画 =================
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
 
-  // うっすら背景の丸
-  for (let i = 0; i < 8; i++) {
-    ctx.fillStyle = i % 2 === 0 ? "rgba(255,210,220,0.15)" : "rgba(255,235,180,0.15)";
-    ctx.beginPath();
-    ctx.arc((i * 170) % canvas.width, 140 + (i * 110) % canvas.height, 50, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  sprites.forEach(s => {
-    if (!s.alive) return;
-    if (s.img.complete) {
-      ctx.drawImage(s.img, s.x, s.y, s.w, s.h);
-    } else {
-      ctx.fillStyle = "#ccc";
-      ctx.fillRect(s.x, s.y, s.w, s.h);
+  sprites.forEach(s=>{
+    if(s.alive && s.img.complete){
+      ctx.drawImage(s.img,s.x,s.y,s.w,s.h);
     }
   });
 
-  drawSparkles();
+  if(boss && boss.alive && boss.img.complete){
+    ctx.globalAlpha = 0.9;
+    ctx.drawImage(boss.img,boss.x,boss.y,boss.w,boss.h);
+    ctx.globalAlpha = 1;
+
+    // HPバー
+    ctx.fillStyle="red";
+    ctx.fillRect(boss.x, boss.y-10, boss.w*(boss.hp/5), 8);
+  }
 }
 
-function loop() {
-  if (started && !gameOver) {
-    moveSprites();
-    updateSparkles();
-  }
+// ================= ループ =================
+function loop(){
+  if(started) move();
   draw();
   requestAnimationFrame(loop);
 }
 
-resetGame();
 loop();
 </script>
+
 </body>
 </html>
