@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ラブキャッチ完成版</title>
+<style>
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: #fff0f5;
+    font-family: sans-serif;
+  }
+
+  canvas {
+    display: block;
+  }
+
+  #title {
+    position: absolute;
+    top: 32%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 42px;
+    font-weight: bold;
+    color: #ff4f79;
+    text-shadow: 0 2px 0 #fff;
+    z-index: 20;
+    white-space: nowrap;
+  }
+
+  #subtitle {
+    position: absolute;
+    top: 40%;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 18px;
+    color: #7a4a57;
+    z-index: 20;
+    white-space: nowrap;
+  }
+
+  #startBtn, #retryBtn {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 16px 34px;
+    font-size: 24px;
+    background: #ff6b81;
+    color: #fff;
+    border: none;
+    border-radius: 14px;
+    cursor: pointer;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.18);
+    z-index: 20;
+  }
+
+  #startBtn {
+    top: 50%;
+    transform: translate(-50%, -50%);
+  }
+
+  #retryBtn {
+    top: 62%;
+    display: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="title">ラブキャッチ💖</div>
+<div id="subtitle">彼とカメラを集めてラブ度アップ</div>
+<button id="startBtn">スタート</button>
+<button id="retryBtn">もう一回</button>
+<canvas id="game"></canvas>
+
+<script>
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+  const startBtn = document.getElementById("startBtn");
+  const retryBtn = document.getElementById("retryBtn");
+  const titleEl = document.getElementById("title");
+  const subtitleEl = document.getElementById("subtitle");
+
+  function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  resizeCanvas();
+
+  window.addEventListener("resize", () => {
+    resizeCanvas();
+    basket.y = canvas.height - 110;
+  });
+
+  const bgm = new Audio("bgm.mp3");
+  bgm.loop = true;
+  bgm.volume = 0.45;
+
+  const getSound = new Audio("get.mp3");
+  getSound.volume = 0.8;
+
+  const eeeSound = new Audio("eee.mp3");
+  eeeSound.volume = 0.8;
+
+  const imgBaby = new Image();
+  imgBaby.src = "baby.png";
+
+  const imgAfro = new Image();
+  imgAfro.src = "afro.png";
+
+  const imgProf = new Image();
+  imgProf.src = "prof.png";
+
+  const imgLeica = new Image();
+  imgLeica.src = "leica.png";
+
+  const imgSony = new Image();
+  imgSony.src = "sony.png";
+
+  let basket;
+  let items;
+  let particles;
+  let score;
+  let speedUp;
+  let combo;
+  let bestCombo;
+  let lives;
+  let feverTimer;
+  let gameStarted;
+  let gameOver;
+  let spawnInterval = null;
+  let flashTimer = 0;
+
+  function resetGame() {
+    basket = {
+      x: canvas.width / 2 - 70,
+      y: canvas.height - 110,
+      w: 140,
+      h: 24
+    };
+
+    items = [];
+    particles = [];
+    score = 0;
+    speedUp = 0;
+    combo = 0;
+    bestCombo = 0;
+    lives = 3;
+    feverTimer = 0;
+    flashTimer = 0;
+    gameStarted = false;
+    gameOver = false;
+
+    bgm.pause();
+    bgm.currentTime = 0;
+
+    retryBtn.style.display = "none";
+    startBtn.style.display = "block";
+    titleEl.style.display = "block";
+    subtitleEl.style.display = "block";
+  }
+
+  resetGame();
+
+  function unlockSounds() {
+    return Promise.all([
+      bgm.play().then(() => {
+        bgm.pause();
+        bgm.currentTime = 0;
+      }).catch(() => {}),
+
+      getSound.play().then(() => {
+        getSound.pause();
+        getSound.currentTime = 0;
+      }).catch(() => {}),
+
+      eeeSound.play().then(() => {
+        eeeSound.pause();
+        eeeSound.currentTime = 0;
+      }).catch(() => {})
+    ]);
+  }
+
+  function startGame() {
+    unlockSounds().then(() => {
+      gameStarted = true;
+      gameOver = false;
+
+      startBtn.style.display = "none";
+      retryBtn.style.display = "none";
+      titleEl.style.display = "none";
+      subtitleEl.style.display = "none";
+
+      bgm.currentTime = 0;
+      bgm.play().catch(() => {});
+    });
+  }
+
+  startBtn.addEventListener("click", startGame);
+  retryBtn.addEventListener("click", () => {
+    resetGame();
+    startGame();
+  });
+
+  document.addEventListener("mousemove", e => {
+    basket.x = e.clientX - basket.w / 2;
+  });
+
+  document.addEventListener("touchmove", e => {
+    if (e.touches.length > 0) {
+      basket.x = e.touches[0].clientX - basket.w / 2;
+    }
+  }, { passive: true });
+
+  function addParticles(x, y, count, color) {
+    for (let i = 0; i < count; i++) {
+      particles.push({
+        x: x,
+        y: y,
+        vx: (Math.random() - 0.5) * 4,
+        vy: -Math.random() * 3 - 1,
+        size: 4 + Math.random() * 5,
+        alpha: 1,
+        color: color
+      });
+    }
+  }
+
+  function updateParticles() {
+    particles = particles.filter(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.08;
+      p.alpha -= 0.02;
+      return p.alpha > 0;
+    });
+  }
+
+  function drawParticles() {
+    particles.forEach(p => {
+      ctx.globalAlpha = p.alpha;
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  function spawnItem() {
+    if (!gameStarted || gameOver) return;
+
+    const rand = Math.random();
+    let type = "prof";
+    let img = imgProf;
+    let value = 5;
+    let size = 84;
+
+    if (rand < 0.12) {
+      type = "baby";
+      img = imgBaby;
+      value = 35;
+      size = 92;
+    } else if (rand < 0.35) {
+      type = "afro";
+      img = imgAfro;
+      value = 12;
+      size = 86;
+    } else if (rand < 0.55) {
+      type = "prof";
+      img = imgProf;
+      value = 6;
+      size = 84;
+    } else if (rand < 0.72) {
+      type = "leica";
+      img = imgLeica;
+      value = 50;
+      size = 92;
+    } else if (rand < 0.88) {
+      type = "sony";
+      img = imgSony;
+      value = 28;
+      size = 92;
+    } else {
+      type = "heart";
+      img = null;
+      value = 20;
+      size = 60;
+    }
+
+    items.push({
+      x: Math.random() * (canvas.width - size),
+      y: -size,
+      size: size,
+      type: type,
+      img: img,
+      value: value,
+      speed: 3 + Math.random() * 2.2 + speedUp
+    });
+  }
+
+  function drawItem(item) {
+    if (item.type === "heart") {
+      ctx.font = "48px serif";
+      ctx.fillText("💘", item.x, item.y + 42);
+      return;
+    }
+
+    if (item.img && item.img.complete && item.img.naturalWidth !== 0) {
+      ctx.drawImage(item.img, item.x, item.y, item.size, item.size);
+    } else {
+      ctx.font = "44px serif";
+      let emoji = "🎓";
+      if (item.type === "baby") emoji = "👶";
+      if (item.type === "afro") emoji = "🕺";
+      if (item.type === "leica") emoji = "📷";
+      if (item.type === "sony") emoji = "📸";
+      ctx.fillText(emoji, item.x, item.y + 42);
+    }
+  }
+
+  function triggerFlash() {
+    flashTimer = 10;
+  }
+
+  function catchItem(item) {
+    let gain = item.value;
+
+    combo++;
+    if (combo > bestCombo) bestCombo = combo;
+
+    if (combo >= 5) gain += 3;
+    if (combo >= 10) gain += 7;
+    if (combo >= 15) gain += 12;
+
+    if (item.type === "baby") {
+      gain += 25;
+      addParticles(item.x + item.size / 2, item.y + item.size / 2, 18, "#ffd1dc");
+      getSound.currentTime = 0;
+      getSound.play().catch(() => {});
+    } else if (item.type === "heart") {
+      feverTimer = 240;
+      addParticles(item.x + item.size / 2, item.y + item.size / 2, 24, "#ff3d6e");
+      getSound.currentTime = 0;
+      getSound.play().catch(() => {});
+    } else if (item.type === "leica" || item.type === "sony") {
+      addParticles(item.x + item.size / 2, item.y + item.size / 2, 26, "#ffe066");
+      eeeSound.currentTime = 0;
+      eeeSound.play().catch(() => {});
+      triggerFlash();
+    } else {
+      addParticles(item.x + item.size / 2, item.y + item.size / 2, 10, "#ff8fab");
+      getSound.currentTime = 0;
+      getSound.play().catch(() => {});
+    }
+
+    if (feverTimer > 0) {
+      gain *= 2;
+    }
+
+    score += gain;
+  }
+
+  function missItem() {
+    combo = 0;
+    lives--;
+    addParticles(basket.x + basket.w / 2, basket.y, 12, "#999");
+
+    if (lives <= 0) {
+      gameOver = true;
+      retryBtn.style.display = "block";
+      bgm.pause();
+    }
+  }
+
+  function drawBackgroundEffect() {
+    if (feverTimer > 0) {
+      ctx.fillStyle = "rgba(255, 100, 150, 0.08)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    if (flashTimer > 0) {
+      ctx.fillStyle = "rgba(255,255,180,0.35)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      flashTimer--;
+    }
+  }
+
+  function drawHUD() {
+    ctx.fillStyle = "#333";
+    ctx.font = "28px sans-serif";
+    ctx.fillText("Love: " + score, 20, 42);
+
+    ctx.font = "22px sans-serif";
+    ctx.fillText("Combo: " + combo, 20, 74);
+    ctx.fillText("Best: " + bestCombo, 20, 104);
+
+    let hearts = "";
+    for (let i = 0; i < lives; i++) hearts += "💖";
+    for (let i = lives; i < 3; i++) hearts += "🩶";
+    ctx.fillText("Life: " + hearts, 20, 136);
+
+    if (feverTimer > 0) {
+      ctx.fillStyle = "#ff3d6e";
+      ctx.font = "bold 30px sans-serif";
+      ctx.fillText("FEVER x2!", canvas.width - 190, 42);
+    }
+  }
+
+  function drawGameOver() {
+    if (!gameOver) return;
+
+    ctx.fillStyle = "rgba(255,255,255,0.78)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = "#ff4f79";
+    ctx.font = "bold 54px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 70);
+
+    ctx.fillStyle = "#333";
+    ctx.font = "30px sans-serif";
+    ctx.fillText("Love: " + score, canvas.width / 2, canvas.height / 2 - 20);
+    ctx.fillText("Best Combo: " + bestCombo, canvas.width / 2, canvas.height / 2 + 20);
+
+    ctx.font = "20px sans-serif";
+    ctx.fillText("もう一回で沼へどうぞ", canvas.width / 2, canvas.height / 2 + 60);
+    ctx.textAlign = "left";
+  }
+
+  function update() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawBackgroundEffect();
+
+    ctx.fillStyle = feverTimer > 0 ? "#ff3d6e" : "#ff6b81";
+    ctx.fillRect(basket.x, basket.y, basket.w, basket.h);
+
+    for (let i = items.length - 1; i >= 0; i--) {
+      const item = items[i];
+      item.y += item.speed;
+      drawItem(item);
+
+      const hit =
+        item.y + item.size > basket.y &&
+        item.x + item.size > basket.x &&
+        item.x < basket.x + basket.w;
+
+      if (hit) {
+        catchItem(item);
+        items.splice(i, 1);
+        continue;
+      }
+
+      if (item.y > canvas.height) {
+        items.splice(i, 1);
+        missItem();
+      }
+    }
+
+    updateParticles();
+    drawParticles();
+    drawHUD();
+    drawGameOver();
+
+    if (gameStarted && !gameOver) {
+      speedUp += 0.0009;
+      if (feverTimer > 0) feverTimer--;
+    }
+
+    requestAnimationFrame(update);
+  }
+
+  function startSpawner() {
+    if (spawnInterval) clearInterval(spawnInterval);
+    spawnInterval = setInterval(() => {
+      spawnItem();
+    }, 700);
+  }
+
+  startSpawner();
+  update();
+</script>
+
+</body>
+</html>
