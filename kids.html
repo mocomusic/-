@@ -3,15 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>鬼つよキャッチ</title>
+<title>ノンストップ20レベル</title>
 
 <style>
-body {
-  margin:0;
-  overflow:hidden;
-  background:linear-gradient(#fff7f0,#ffeef5);
-  font-family:sans-serif;
-}
+body { margin:0; overflow:hidden; background:#fff5f8; font-family:sans-serif; }
 
 #ui {
   position:absolute;
@@ -22,11 +17,22 @@ body {
   z-index:10;
 }
 
-#score, #level {
+#score,#level {
   background:#fff;
   padding:6px 14px;
   border-radius:20px;
   margin-top:5px;
+}
+
+#levelUp {
+  position:absolute;
+  top:40%;
+  left:50%;
+  transform:translate(-50%,-50%);
+  font-size:48px;
+  color:#ff4f79;
+  display:none;
+  z-index:20;
 }
 
 #startBtn {
@@ -54,27 +60,30 @@ canvas { display:block; }
   <div id="level">レベル1</div>
 </div>
 
+<div id="levelUp">LEVEL UP!</div>
+
 <button id="startBtn">スタート！</button>
 <canvas id="game"></canvas>
 
 <audio id="sound" src="get.mp3"></audio>
 
 <script>
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-const startBtn = document.getElementById("startBtn");
-const scoreEl = document.getElementById("score");
-const levelEl = document.getElementById("level");
-const sound = document.getElementById("sound");
+const canvas=document.getElementById("game");
+const ctx=canvas.getContext("2d");
+const startBtn=document.getElementById("startBtn");
+const scoreEl=document.getElementById("score");
+const levelEl=document.getElementById("level");
+const levelUpEl=document.getElementById("levelUp");
+const sound=document.getElementById("sound");
 
 function resize(){
-  canvas.width = innerWidth;
-  canvas.height = innerHeight;
+  canvas.width=innerWidth;
+  canvas.height=innerHeight;
 }
 resize();
 addEventListener("resize",resize);
 
-const files = [
+const files=[
 "baba.png","kei.png","nagomi.png","oyako.png",
 "yukinago.png","karan.png","sauaka.png","uedake.png","reiko.png"
 ];
@@ -84,11 +93,12 @@ let boss=null;
 let level=1;
 let cleared=0;
 let started=false;
+const MAX_LEVEL=20;
 
 // ================= 初期化 =================
 function createSprites(){
   sprites=[];
-  const size = Math.max(60,160 - level*10);
+  const size=Math.max(50,160-level*5);
 
   files.forEach(f=>{
     const img=new Image();
@@ -100,43 +110,49 @@ function createSprites(){
       y:120+Math.random()*(canvas.height-200),
       w:size,
       h:size,
-      vx:(Math.random()-0.5)*(1+level*0.5),
-      vy:(Math.random()-0.5)*(1+level*0.5),
+      vx:(Math.random()-0.5)*(1+level*0.4),
+      vy:(Math.random()-0.5)*(1+level*0.4),
       alive:true
     });
   });
 
-  // 👹鬼ボス（レベル3〜）
-  if(level >= 3){
+  if(level%5===0){
     const img=new Image();
-    img.src = files[Math.floor(Math.random()*files.length)];
+    img.src=files[Math.floor(Math.random()*files.length)];
 
-    boss = {
+    boss={
       img,
       x:canvas.width/2,
       y:200,
       w:size*2,
       h:size*2,
-      vx:4+level,
-      vy:4+level,
-      hp:5,
+      vx:3+level,
+      vy:3+level,
+      hp:3+Math.floor(level/5),
       alive:true,
       teleportTimer:0,
       isBoss:true
     };
-  } else {
+  }else{
     boss=null;
   }
 }
 
-// ================= UI =================
 function updateUI(){
-  scoreEl.textContent = `${cleared} / ${sprites.length + (boss?1:0)}`;
-  levelEl.textContent = `レベル ${level}`;
+  scoreEl.textContent=`${cleared} / ${sprites.length+(boss?1:0)}`;
+  levelEl.textContent=`レベル ${level}`;
+}
+
+// ================= レベルアップ表示 =================
+function showLevelUp(){
+  levelUpEl.style.display="block";
+  setTimeout(()=>{
+    levelUpEl.style.display="none";
+  },600);
 }
 
 // ================= スタート =================
-startBtn.onclick = ()=>{
+startBtn.onclick=()=>{
   sound.play().then(()=>{sound.pause();sound.currentTime=0});
   startBtn.style.display="none";
   started=true;
@@ -147,92 +163,63 @@ function nextLevel(){
   cleared=0;
   createSprites();
   updateUI();
+  showLevelUp();
 }
 
-// ================= 移動 =================
+// ================= 動き =================
 function move(){
-  [...sprites, boss].forEach(s=>{
-    if(!s || !s.alive) return;
+  [...sprites,boss].forEach(s=>{
+    if(!s||!s.alive)return;
 
-    s.x += s.vx;
-    s.y += s.vy;
+    s.x+=s.vx;
+    s.y+=s.vy;
 
-    if(s.x<0 || s.x+s.w>canvas.width) s.vx*=-1;
-    if(s.y<100 || s.y+s.h>canvas.height) s.vy*=-1;
+    if(s.x<0||s.x+s.w>canvas.width)s.vx*=-1;
+    if(s.y<100||s.y+s.h>canvas.height)s.vy*=-1;
   });
 
-  // 👹ボス特殊
-  if(boss && boss.alive){
+  if(boss&&boss.alive){
     boss.teleportTimer++;
-
-    // ワープ
-    if(boss.teleportTimer > 100){
-      boss.x = Math.random()*(canvas.width - boss.w);
-      boss.y = 120 + Math.random()*(canvas.height - 200);
-      boss.teleportTimer = 0;
-    }
-
-    // たまに止まる（チャンス）
-    if(Math.random() < 0.01){
-      boss.vx = 0;
-      boss.vy = 0;
-      setTimeout(()=>{
-        boss.vx = 4+level;
-        boss.vy = 4+level;
-      },700);
+    if(boss.teleportTimer>100){
+      boss.x=Math.random()*(canvas.width-boss.w);
+      boss.y=120+Math.random()*(canvas.height-200);
+      boss.teleportTimer=0;
     }
   }
 }
 
-// ================= 逃げる =================
+// ================= 逃げ =================
 function flee(px,py){
-  [...sprites, boss].forEach(s=>{
-    if(!s || !s.alive) return;
+  [...sprites,boss].forEach(s=>{
+    if(!s||!s.alive)return;
 
-    const dx = (s.x+s.w/2) - px;
-    const dy = (s.y+s.h/2) - py;
-    const dist = Math.sqrt(dx*dx + dy*dy);
+    const dx=(s.x+s.w/2)-px;
+    const dy=(s.y+s.h/2)-py;
+    const dist=Math.sqrt(dx*dx+dy*dy);
 
-    if(dist < 140){
-
-      if(s.isBoss){
-        // 👹ワープ逃げ
-        if(dist < 150){
-          s.x = Math.random()*(canvas.width - s.w);
-          s.y = 120 + Math.random()*(canvas.height - 200);
-          return;
-        }
-
-        const power = 40 + level*5;
-        s.x += dx/dist * power;
-        s.y += dy/dist * power;
-
-      } else {
-        const power = 20 + level*3;
-        s.x += dx/dist * power;
-        s.y += dy/dist * power;
-      }
+    if(dist<140){
+      const power=(s.isBoss?40:20)+level*3;
+      s.x+=dx/dist*power;
+      s.y+=dy/dist*power;
     }
   });
 }
 
-// ================= 捕まえる =================
+// ================= キャッチ =================
 function catchCheck(px,py){
-  [...sprites, boss].forEach(s=>{
-    if(!s || !s.alive) return;
+  [...sprites,boss].forEach(s=>{
+    if(!s||!s.alive)return;
 
-    if(px>s.x && px<s.x+s.w && py>s.y && py<s.y+s.h){
+    if(px>s.x&&px<s.x+s.w&&py>s.y&&py<s.y+s.h){
 
       if(s.isBoss){
         s.hp--;
         sound.play();
-
         if(s.hp<=0){
           s.alive=false;
           cleared++;
         }
-
-      } else {
+      }else{
         s.alive=false;
         cleared++;
         sound.play();
@@ -240,12 +227,11 @@ function catchCheck(px,py){
 
       updateUI();
 
-      if(cleared === sprites.length + (boss?1:0)){
-        level++;
-        setTimeout(()=>{
-          alert("レベルアップ！");
+      if(cleared===sprites.length+(boss?1:0)){
+        if(level < MAX_LEVEL){
+          level++;
           nextLevel();
-        },300);
+        }
       }
     }
   });
@@ -253,7 +239,7 @@ function catchCheck(px,py){
 
 // ================= 操作 =================
 canvas.addEventListener("mousemove",e=>{
-  if(started) flee(e.clientX,e.clientY);
+  if(started)flee(e.clientX,e.clientY);
 });
 
 canvas.addEventListener("touchmove",e=>{
@@ -277,29 +263,24 @@ function draw(){
   ctx.clearRect(0,0,canvas.width,canvas.height);
 
   sprites.forEach(s=>{
-    if(s.alive && s.img.complete){
+    if(s.alive&&s.img.complete){
       ctx.drawImage(s.img,s.x,s.y,s.w,s.h);
     }
   });
 
-  if(boss && boss.alive && boss.img.complete){
-    ctx.globalAlpha = 0.9;
+  if(boss&&boss.alive&&boss.img.complete){
     ctx.drawImage(boss.img,boss.x,boss.y,boss.w,boss.h);
-    ctx.globalAlpha = 1;
 
-    // HPバー
     ctx.fillStyle="red";
-    ctx.fillRect(boss.x, boss.y-10, boss.w*(boss.hp/5), 8);
+    ctx.fillRect(boss.x,boss.y-10,boss.w*(boss.hp/(3+Math.floor(level/5))),8);
   }
 }
 
-// ================= ループ =================
 function loop(){
-  if(started) move();
+  if(started)move();
   draw();
   requestAnimationFrame(loop);
 }
-
 loop();
 </script>
 
