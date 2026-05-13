@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>演奏順くじ引き</title>
+<style>
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+  background: #fff8e8;
+  padding: 20px;
+  color: #102040;
+}
+h1 {
+  text-align: center;
+  color: #0b2a5b;
+}
+textarea {
+  width: 100%;
+  height: 180px;
+  font-size: 18px;
+}
+button, select {
+  font-size: 20px;
+  padding: 12px;
+  margin: 8px 0;
+  width: 100%;
+}
+.card {
+  background: white;
+  border-radius: 16px;
+  padding: 18px;
+  margin: 15px 0;
+  box-shadow: 0 3px 10px #ccc;
+}
+.result {
+  font-size: 32px;
+  color: #b07a00;
+  font-weight: bold;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+td, th {
+  border: 1px solid #ccc;
+  padding: 8px;
+  text-align: center;
+}
+</style>
+</head>
+
+<body>
+
+<h1>演奏順くじ引き</h1>
+
+<div class="card">
+  <h2>演奏者10人</h2>
+  <textarea id="names">入野みえ
+上田玲子
+音野響
+久保啓子
+鈴木泰雄
+滝沢真一
+出崎純子
+中川京子
+中屋菜穂子
+古川正巳</textarea>
+  <button onclick="startLottery()">くじ引きを開始</button>
+</div>
+
+<div class="card">
+  <h2>先着順でくじを引く</h2>
+  <select id="personSelect">
+    <option value="">まず開始してください</option>
+  </select>
+  <button onclick="drawForPerson()">この人がくじを引く</button>
+  <div id="currentResult" class="result"></div>
+</div>
+
+<div class="card">
+  <h2>抽選結果</h2>
+  <div id="results"></div>
+</div>
+
+<div class="card">
+  <h2>1番〜20番 演奏順</h2>
+  <table id="orderTable">
+    <tr><th>順番</th><th>演奏者</th></tr>
+  </table>
+</div>
+
+<script>
+let remainingTickets = [];
+let results = [];
+
+function shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+function startLottery() {
+  const names = document.getElementById("names").value
+    .split("\n")
+    .map(n => n.trim())
+    .filter(n => n);
+
+  if (names.length !== 10) {
+    alert("演奏者を10人入力してください");
+    return;
+  }
+
+  remainingTickets = shuffle([...Array(20)].map((_, i) => i + 1));
+  results = [];
+
+  const select = document.getElementById("personSelect");
+  select.innerHTML = "";
+  names.forEach(name => {
+    const option = document.createElement("option");
+    option.value = name;
+    option.textContent = name;
+    select.appendChild(option);
+  });
+
+  document.getElementById("currentResult").innerHTML = "";
+  updateResults();
+  updateOrderTable();
+
+  alert("くじ引きを開始しました");
+}
+
+function drawForPerson() {
+  const select = document.getElementById("personSelect");
+  const name = select.value;
+
+  if (!name) {
+    alert("くじを引く人を選んでください");
+    return;
+  }
+
+  if (remainingTickets.length < 2) {
+    alert("くじは終了しました");
+    return;
+  }
+
+  const num1 = remainingTickets.pop();
+  const num2 = remainingTickets.pop();
+  const nums = [num1, num2].sort((a,b) => a-b);
+
+  results.push({ name: name, numbers: nums });
+
+  document.getElementById("currentResult").innerHTML =
+    name + " さん<br>" + nums[0] + "番・" + nums[1] + "番";
+
+  select.remove(select.selectedIndex);
+
+  updateResults();
+  updateOrderTable();
+}
+
+function updateResults() {
+  const div = document.getElementById("results");
+  div.innerHTML = "";
+
+  results.forEach((r, i) => {
+    div.innerHTML +=
+      "<p>" + (i + 1) + "人目：" + r.name +
+      " → " + r.numbers[0] + "番・" + r.numbers[1] + "番</p>";
+  });
+}
+
+function updateOrderTable() {
+  const table = document.getElementById("orderTable");
+  table.innerHTML = "<tr><th>順番</th><th>演奏者</th></tr>";
+
+  let order = [];
+  results.forEach(r => {
+    r.numbers.forEach(n => {
+      order.push({ number: n, name: r.name });
+    });
+  });
+
+  order.sort((a,b) => a.number - b.number);
+
+  order.forEach(r => {
+    table.innerHTML +=
+      "<tr><td>" + r.number + "番</td><td>" + r.name + "</td></tr>";
+  });
+}
+</script>
+
+</body>
+</html>
